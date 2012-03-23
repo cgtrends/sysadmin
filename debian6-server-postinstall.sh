@@ -3,7 +3,7 @@
 # Post-installation script for all-in-one application server
 # to be run on Debian 6 (squeeze)
 
-# Domain name
+# Domain Name
 DOMAIN_NAME="pollonius.com"
 
 # MySQL root user
@@ -201,7 +201,8 @@ createUserAccounts() {
     echo "Creating user accounts..."
     
     local gid=$(grep "^$RESIN_GROUP" /etc/group | cut -d':' -f3)
-    useradd -d /home/$USER -m -g $gid $USER
+    useradd -d /home/$USER -m -g $gid --shell /bin/bash $USER
+    echo "$USER:$USER_PWD" | chpasswd
 }
 
 # ------------------------------------------------------------------------------
@@ -385,8 +386,7 @@ installExim() {
     apt-get -y install exim4-daemon-light
     
     echo $FQDN >/etc/mailname
-    echo "
-# /etc/exim4/update-exim4.conf.conf
+    echo "# /etc/exim4/update-exim4.conf.conf
 #
 # Edit this file and /etc/mailname by hand and execute update-exim4.conf
 # yourself or use 'dpkg-reconfigure exim4-config'
@@ -420,17 +420,6 @@ dc_localdelivery='maildir_home'
 " >/etc/exim4/update-exim4.conf.conf
     
     update-exim4.conf
-    
-#    echo exim4-config exim4/dc_eximconfig_configtype select 'internet site; mail is sent and received directly using SMTP' | debconf-set-selections
-#    echo exim4-config exim4/mailname string $FQDN | debconf-set-selections
-#    echo exim4-config exim4/dc_local_interfaces string 127.0.0.1 ; ::1 | debconf-set-selections
-#    echo exim4-config exim4/dc_other_hostnames string $FQDN | debconf-set-selections
-#    echo exim4-config exim4/dc_relay_domains string  | debconf-set-selections
-#    echo exim4-config exim4/dc_relay_nets string  | debconf-set-selections
-#    echo exim4-config exim4/dc_minimaldns boolean false | debconf-set-selections
-#    echo exim4-config exim4/dc_localdelivery select 'Maildir format in home directory' | debconf-set-selections
-#    echo exim4-config exim4/use_split_config boolean false | debconf-set-selections
-#    dpkg-reconfigure exim4-config
 }
 
 # ------------------------------------------------------------------------------
