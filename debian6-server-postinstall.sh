@@ -356,9 +356,9 @@ synchronizeTime() {
 secureRootAccount() {
     echo "Securing root account..."
     
-    rm /root/.ssh/authorized_keys2
-    rm /root/.p
-    rm /root/.email
+#    rm /root/.ssh/authorized_keys2
+#    rm /root/.p
+#    rm /root/.email
     
     apt-get -y install fail2ban
 }
