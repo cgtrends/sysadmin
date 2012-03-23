@@ -25,7 +25,8 @@ RESIN_ROOT="/var/www"
 # Resin configuration path (no trailing slash)
 RESIN_CONFIG_PATH="/etc/resin"
 
-USER="goriol"
+# Convenience user
+USER="pollonius"
 
 # URL of the JDK. Must be a tar or tar gzip file.
 JDK="http://download.oracle.com/otn-pub/java/jdk/7u3-b04/jdk-7u3-linux-x64.tar.gz"
@@ -36,6 +37,8 @@ JDK_INSTALL_PATH="/usr/lib/jvm"
 updatePackages() {
     echo "Updating Debian packages..."
     
+    echo 'deb http://security.debian.org/ squeeze/updates main contrib non-free' >>/etc/apt/sources.list
+    
     apt-get update
     if [ $? -ne 0 ]
     then
@@ -44,6 +47,8 @@ updatePackages() {
         exit 10
     fi
     
+    # RAID setup
+    echo mdadm mdadm/initrdstart string all | debconf-set-selections
     apt-get -y upgrade
     if [ $? -ne 0 ]
     then
@@ -65,6 +70,10 @@ generatePasswords() {
         exit 20
     fi
     
+    USER_PWD=$(makepasswd --chars 8)
+    echo $USER_PWD >/root/shell_$USER.txt
+    chmod 600 /root/shell_$USER.txt
+    
     MYSQL_ROOT_PWD=$(makepasswd --chars 8)
     echo $MYSQL_ROOT_PWD >/root/mysql_$MYSQL_ROOT_USER.txt
     chmod 600 /root/mysql_$MYSQL_ROOT_USER.txt
@@ -84,6 +93,7 @@ downloadAndExpand() {
     local archive=`basename $url`
     
     echo "Dowloading $url into $dir"
+    mkdir -p $dir
     pushd $dir
     wget $url
     if [ $? -ne 0 ]
@@ -327,6 +337,33 @@ RESIN_CONF="-conf '"$RESIN_CONFIG_PATH"'/resin.conf"'
 }
 
 # ------------------------------------------------------------------------------
+synchronizeTime() {
+    echo "Synchronizing server time..."
+    
+    apt-get -y install ntpdate
+    ntpdate pool.ntp.org
+    
+    apt-get -y install ntp
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to install NTP"
+        echo "Post-install aborted"
+        exit 80
+    fi
+}
+
+# ------------------------------------------------------------------------------
+secureRootAccount() {
+    echo "Securing root account..."
+    
+    rm /root/.ssh/authorized_keys2
+    rm /root/.p
+    rm /root/.email
+    
+    apt-get -y install fail2ban
+}
+
+# ------------------------------------------------------------------------------
 # Check the script is run by root user
 if [ $EUID -ne 0 ]; then
     echo "This post-install script must be run by root user"
@@ -344,6 +381,7 @@ installCompiler
 installResin
 configureResin
 configureResinStartup
+secureRootAccount
 
 echo "Post-install completed successfully"
 exit 0
