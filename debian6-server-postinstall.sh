@@ -44,7 +44,7 @@ updatePackages() {
         exit 10
     fi
     
-    apt-get upgrade
+    apt-get -y upgrade
     if [ $? -ne 0 ]
     then
         echo "Unable to upgrade Debian packages"
@@ -57,7 +57,7 @@ updatePackages() {
 generatePasswords() {
     echo "Generating passwords..."
     
-    apt-get install makepasswd
+    apt-get -y install makepasswd
     if [ $? -ne 0 ]
     then
         echo "Unable to get makepasswd"
