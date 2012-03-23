@@ -3,6 +3,9 @@
 # Post-installation script for all-in-one application server
 # to be run on Debian 6 (squeeze)
 
+# Domain name
+DOMAIN_NAME="pollonius.com"
+
 # MySQL root user
 MYSQL_ROOT_USER="root"
 # MySQL user that is used by the application
@@ -37,8 +40,6 @@ JDK_INSTALL_PATH="/usr/lib/jvm"
 updatePackages() {
     echo "Updating Debian packages..."
     
-    echo 'deb http://security.debian.org/ squeeze/updates main contrib non-free' >>/etc/apt/sources.list
-    
     apt-get update
     if [ $? -ne 0 ]
     then
@@ -47,7 +48,7 @@ updatePackages() {
         exit 10
     fi
     
-    # RAID setup
+    # Software RAID setup
     echo mdadm mdadm/initrdstart string all | debconf-set-selections
     apt-get -y upgrade
     if [ $? -ne 0 ]
@@ -90,7 +91,7 @@ generatePasswords() {
 downloadAndExpand() {
     local url=$1
     local dir=$2
-    local archive=`basename $url`
+    local archive=$(basename $url)
     
     echo "Dowloading $url into $dir"
     mkdir -p $dir
@@ -184,7 +185,7 @@ installMysql() {
     mysqladmin --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD status >/dev/null
     if [ $? -ne 0 ]
     then
-        /etc/init.d/mysql start
+        invoke-rc.d mysql start
     fi
     mysqladmin --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD status >/dev/null
     if [ $? -ne 0 ]
@@ -207,7 +208,7 @@ createUserAccounts() {
 initDatabase() {
     echo "Initializing database..."
     
-    local sql=`basename MYSQL_DB_SCRIPT`
+    local sql=$(basename $MYSQL_DB_SCRIPT)
     wget $MYSQL_DB_SCRIPT -P /home/$USER
     if [ $? -ne 0 ]
     then
@@ -277,11 +278,12 @@ installResin() {
 configureResin() {
     echo "Configuring Resin..."
     mkdir -p $RESIN_ROOT
-    chown $RESIN_USER:$RESIN_GROUP $RESIN_ROOT
+    mkdir -p $RESIN_ROOT/webapps
+    chown $RESIN_USER:$RESIN_GROUP $RESIN_ROOT/webapps
     
     local host='\
-    <host id="www.pollonius.com" root-directory=".">\
-      <host-alias>pollonius.com</host-alias>\
+    <host id="www.'"$DOMAIN_NAME"'" root-directory=".">\
+      <host-alias>'"$DOMAIN_NAME"'</host-alias>\
       <web-app id="/" document-directory="webapps/pollonius">\
         <welcome-file-list>index.html</welcome-file-list>\
         <session-config>\
@@ -325,8 +327,8 @@ configureResinStartup() {
 RESIN_ROOT="-root-directory '"$RESIN_ROOT"'"\
 RESIN_CONF="-conf '"$RESIN_CONFIG_PATH"'/resin.conf"'
 
+    # We can't use USER= when Resin is bound to port 80
     sed -e '/^#!\/bin\/sh\s*$/a '"$lsb" \
-        -e 's/^USER=\(.*\)$/USER="'"$RESIN_USER"'"/' \
         -e '/^USER=.*$/a '"$args" \
         -e 's/^ARGS=".*"\s*$/ARGS="$RESIN_CONF $RESIN_ROOT $SERVER"/' \
         $RESIN_HOME/contrib/init.resin > /etc/init.d/resin
@@ -337,8 +339,8 @@ RESIN_CONF="-conf '"$RESIN_CONFIG_PATH"'/resin.conf"'
 }
 
 # ------------------------------------------------------------------------------
-synchronizeTime() {
-    echo "Synchronizing server time..."
+installNtp() {
+    echo "Synchronizing with a time server..."
     
     apt-get -y install ntpdate
     ntpdate pool.ntp.org
@@ -353,6 +355,19 @@ synchronizeTime() {
 }
 
 # ------------------------------------------------------------------------------
+setHostName() {
+    echo "Setting host name..."
+    
+    SYSTEM_NAME=$(grep -o "^[^.]*" /etc/hostname)
+    FQDN="$SYSTEM_NAME.$DOMAIN_NAME"
+    echo $FQDN >/etc/hostname
+    invoke-rc.d hostname.sh stop
+    invoke-rc.d hostname.sh start
+    
+    sed -i -e 's/^\([0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}[[:space:]]\+\)\('"$SYSTEM_NAME"'\).*$/\1'"$FQDN"'/' /etc/hosts
+}
+
+# ------------------------------------------------------------------------------
 secureRootAccount() {
     echo "Securing root account..."
     
@@ -364,6 +379,61 @@ secureRootAccount() {
 }
 
 # ------------------------------------------------------------------------------
+installExim() {
+    echo "Installing basic Exim server..."
+
+    apt-get -y install exim4-daemon-light
+    
+    echo $FQDN >/etc/mailname
+    echo "
+# /etc/exim4/update-exim4.conf.conf
+#
+# Edit this file and /etc/mailname by hand and execute update-exim4.conf
+# yourself or use 'dpkg-reconfigure exim4-config'
+#
+# Please note that this is _not_ a dpkg-conffile and that automatic changes
+# to this file might happen. The code handling this will honor your local
+# changes, so this is usually fine, but will break local schemes that mess
+# around with multiple versions of the file.
+#
+# update-exim4.conf uses this file to determine variable values to generate
+# exim configuration macros for the configuration file.
+#
+# Most settings found in here do have corresponding questions in the
+# Debconf configuration, but not all of them.
+#
+# This is a Debian specific file
+
+dc_eximconfig_configtype='internet'
+dc_other_hostnames='$FQDN'
+dc_local_interfaces='127.0.0.1 ; ::1'
+dc_readhost=''
+dc_relay_domains=''
+dc_minimaldns='false'
+dc_relay_nets=''
+dc_smarthost=''
+CFILEMODE='644'
+dc_use_split_config='false'
+dc_hide_mailname=''
+dc_mailname_in_oh='true'
+dc_localdelivery='maildir_home'
+" >/etc/exim4/update-exim4.conf.conf
+    
+    update-exim4.conf
+    
+#    echo exim4-config exim4/dc_eximconfig_configtype select 'internet site; mail is sent and received directly using SMTP' | debconf-set-selections
+#    echo exim4-config exim4/mailname string $FQDN | debconf-set-selections
+#    echo exim4-config exim4/dc_local_interfaces string 127.0.0.1 ; ::1 | debconf-set-selections
+#    echo exim4-config exim4/dc_other_hostnames string $FQDN | debconf-set-selections
+#    echo exim4-config exim4/dc_relay_domains string  | debconf-set-selections
+#    echo exim4-config exim4/dc_relay_nets string  | debconf-set-selections
+#    echo exim4-config exim4/dc_minimaldns boolean false | debconf-set-selections
+#    echo exim4-config exim4/dc_localdelivery select 'Maildir format in home directory' | debconf-set-selections
+#    echo exim4-config exim4/use_split_config boolean false | debconf-set-selections
+#    dpkg-reconfigure exim4-config
+}
+
+# ------------------------------------------------------------------------------
 # Check the script is run by root user
 if [ $EUID -ne 0 ]; then
     echo "This post-install script must be run by root user"
@@ -371,7 +441,9 @@ if [ $EUID -ne 0 ]; then
     exit 1
 fi
 
+setHostName
 updatePackages
+installNtp
 generatePasswords
 installJDK
 installMysql
@@ -382,6 +454,7 @@ installResin
 configureResin
 configureResinStartup
 secureRootAccount
+installExim
 
 echo "Post-install completed successfully"
 exit 0
