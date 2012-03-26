@@ -1,0 +1,5 @@
+# Use /bin/bash to run commands, instead of the default /bin/sh
+SHELL=/bin/bash
+#
+# Nightly backup
+0 4 * * *       /root/scripts/backup-nightly.sh ns385350.ovh.net

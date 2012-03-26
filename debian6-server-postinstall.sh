@@ -10,6 +10,8 @@ DOMAIN_NAME="pollonius.com"
 MYSQL_ROOT_USER="root"
 # MySQL user that is used by the application
 MYSQL_APP_USER="poll"
+# MySQL user that is used to backup databases
+MYSQL_BACKUP_USER="backup"
 # Database name
 MYSQL_DB_NAME="poll"
 # URL of the SQL script used to create the database and initialize it
@@ -35,6 +37,17 @@ USER="pollonius"
 JDK="http://download.oracle.com/otn-pub/java/jdk/7u3-b04/jdk-7u3-linux-x64.tar.gz"
 # Location of the Java virtual machines, without trailing slash
 JDK_INSTALL_PATH="/usr/lib/jvm"
+
+# Base URL of the sysadmin scripts
+SYSADMIN_BASE="https://raw.github.com/cgtrends/sysadmin/master"
+BACKUP_DIRS="backup-dirs.sh"
+BACKUP_WWW="backup-dirs.sh"
+BACKUP_DB="backup-db.sh"
+BACKUP_INIT="backup-init.sh"
+BACKUP_SEND="backup-send.sh"
+BACKUP_NIGHTLY="backup-nightly.sh"
+BACKUP_CRONTAB="crontab.dist"
+WEBAPP_DEPLOY="webapp-deploy.sh"
 
 # ------------------------------------------------------------------------------
 updatePackages() {
@@ -72,16 +85,20 @@ generatePasswords() {
     fi
     
     USER_PWD=$(makepasswd --chars 8)
-    echo $USER_PWD >/root/shell_$USER.txt
-    chmod 600 /root/shell_$USER.txt
+    echo $USER_PWD >/root/.p.shell.$USER
+    chmod 400 /root/.p.shell.$USER
     
     MYSQL_ROOT_PWD=$(makepasswd --chars 8)
-    echo $MYSQL_ROOT_PWD >/root/mysql_$MYSQL_ROOT_USER.txt
-    chmod 600 /root/mysql_$MYSQL_ROOT_USER.txt
+    echo $MYSQL_ROOT_PWD >/root/.p.mysql.$MYSQL_ROOT_USER
+    chmod 400 /root/.p.mysql.$MYSQL_ROOT_USER
     
     MYSQL_APP_PWD=$(makepasswd --chars 8)
-    echo $MYSQL_APP_PWD >/root/mysql_$MYSQL_APP_USER.txt
-    chmod 600 /root/mysql_$MYSQL_APP_USER.txt
+    echo $MYSQL_APP_PWD >/root/.p.mysql.$MYSQL_APP_USER
+    chmod 400 /root/.p.mysql.$MYSQL_APP_USER
+    
+    MYSQL_BACKUP_PWD=$(makepasswd --chars 8)
+    echo $MYSQL_BACKUP_PWD >/root/.p.mysql.$MYSQL_BACKUP_USER
+    chmod 400 /root/.p.mysql.$MYSQL_BACKUP_USER
 }
 
 # ------------------------------------------------------------------------------
@@ -218,8 +235,13 @@ initDatabase() {
         exit 50
     fi
     mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD < /home/$USER/$sql
+
     mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "CREATE USER '$MYSQL_APP_USER'@'localhost' IDENTIFIED BY '$MYSQL_APP_PWD';"
     mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "GRANT ALL PRIVILEGES ON $MYSQL_DB_NAME.* TO '$MYSQL_APP_USER'@'localhost' WITH GRANT OPTION;"
+
+    mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "CREATE USER '$MYSQL_BACKUP_USER'@'localhost' IDENTIFIED BY '$MYSQL_BACKUP_PWD';"
+    mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "GRANT SELECT, LOCK TABLES ON *.* TO '$MYSQL_BACKUP_USER'@'localhost';"
+
     mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "FLUSH PRIVILEGES;"
 }
 
@@ -337,6 +359,7 @@ RESIN_CONF="-conf '"$RESIN_CONFIG_PATH"'/resin.conf"'
     chmod 755 /etc/init.d/resin
         
     update-rc.d resin defaults
+    invoke-rc.d resin start
 }
 
 # ------------------------------------------------------------------------------
@@ -384,6 +407,12 @@ installExim() {
     echo "Installing basic Exim server..."
 
     apt-get -y install exim4-daemon-light
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to install NTP"
+        echo "Post-install aborted"
+        exit 81
+    fi
     
     echo $FQDN >/etc/mailname
     echo "# /etc/exim4/update-exim4.conf.conf
@@ -423,6 +452,88 @@ dc_localdelivery='maildir_home'
 }
 
 # ------------------------------------------------------------------------------
+prepareSysAdmin() {
+	mkdir -p /root/scripts
+    mkdir -p /var/log/backup
+    mkdir -p /backup/dirs
+    mkdir -p /backup/www
+    mkdir -p /backup/db
+    
+    wget $SYSADMIN_BASE/$BACKUP_DIRS -P /root/scripts
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get $BACKUP_DIRS"
+        echo "Post-install aborted"
+        exit 90
+    fi
+    chmod 700 /root/scripts/$BACKUP_DIRS
+    
+    wget $SYSADMIN_BASE/$BACKUP_WWW -P /root/scripts
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get $BACKUP_WWW"
+        echo "Post-install aborted"
+        exit 91
+    fi
+    chmod 700 /root/scripts/$BACKUP_WWW
+    
+    wget $SYSADMIN_BASE/$BACKUP_DB -P /root/scripts
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get $BACKUP_DB"
+        echo "Post-install aborted"
+        exit 92
+    fi
+    chmod 700 /root/scripts/$BACKUP_DB
+    
+    wget $SYSADMIN_BASE/$BACKUP_INIT -P /root/scripts
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get $BACKUP_INIT"
+        echo "Post-install aborted"
+        exit 93
+    fi
+    chmod 700 /root/scripts/$BACKUP_INIT
+    
+    wget $SYSADMIN_BASE/$BACKUP_SEND -P /root/scripts
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get $BACKUP_SEND"
+        echo "Post-install aborted"
+        exit 94
+    fi
+    chmod 700 /root/scripts/$BACKUP_SEND
+    
+    wget $SYSADMIN_BASE/$BACKUP_NIGHTLY -P /root/scripts
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get $BACKUP_NIGHTLY"
+        echo "Post-install aborted"
+        exit 95
+    fi
+    chmod 700 /root/scripts/$BACKUP_NIGHTLY
+    
+    wget $SYSADMIN_BASE/$BACKUP_CRONTAB -P /root/scripts
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get $BACKUP_CRONTAB"
+        echo "Post-install aborted"
+        exit 96
+    fi
+    chmod 400 /root/scripts/$BACKUP_CRONTAB
+    crontab /root/scripts/$BACKUP_CRONTAB
+    
+    wget $SYSADMIN_BASE/$WEBAPP_DEPLOY -P /root/scripts
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get $WEBAPP_DEPLOY"
+        echo "Post-install aborted"
+        exit 97
+    fi
+    chmod 700 /root/scripts/$WEBAPP_DEPLOY
+}
+
+# ------------------------------------------------------------------------------
 # Check the script is run by root user
 if [ $EUID -ne 0 ]; then
     echo "This post-install script must be run by root user"
@@ -433,6 +544,7 @@ fi
 setHostName
 updatePackages
 installNtp
+secureRootAccount
 generatePasswords
 installJDK
 installMysql
@@ -442,8 +554,8 @@ installCompiler
 installResin
 configureResin
 configureResinStartup
-secureRootAccount
 installExim
+prepareSysAdmin
 
 echo "Post-install completed successfully"
 exit 0
