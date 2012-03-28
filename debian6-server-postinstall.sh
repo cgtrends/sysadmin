@@ -34,7 +34,8 @@ RESIN_CONFIG_PATH="/etc/resin"
 USER="pollonius"
 
 # URL of the JDK. Must be a tar or tar gzip file.
-JDK="http://download.oracle.com/otn-pub/java/jdk/7u3-b04/jdk-7u3-linux-x64.tar.gz"
+#JDK="http://download.oracle.com/otn-pub/java/jdk/7u3-b04/jdk-7u3-linux-x64.tar.gz"
+JDK="http://dl.dropbox.com/u/3279745/jdk-7u3-linux-x64.tar.gz"
 # Location of the Java virtual machines, without trailing slash
 JDK_INSTALL_PATH="/usr/lib/jvm"
 
@@ -154,6 +155,9 @@ downloadAndExpand() {
             return 3
         fi
         rm $archive
+    else
+        echo "Not a tar archive: $archive"
+        return 4
     fi
 
     popd
