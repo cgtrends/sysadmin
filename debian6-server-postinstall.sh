@@ -41,7 +41,7 @@ JDK_INSTALL_PATH="/usr/lib/jvm"
 # Base URL of the sysadmin scripts
 SYSADMIN_BASE="https://raw.github.com/cgtrends/sysadmin/master"
 BACKUP_DIRS="backup-dirs.sh"
-BACKUP_WWW="backup-dirs.sh"
+BACKUP_WWW="backup-www.sh"
 BACKUP_DB="backup-db.sh"
 BACKUP_INIT="backup-init.sh"
 BACKUP_SEND="backup-send.sh"

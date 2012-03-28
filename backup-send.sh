@@ -28,7 +28,8 @@ then
 fi
 
 ts=$(date "+%Y-%m-%dT%H-%M-%S")
-ftp -ivn $FTP_HOST <<EOT | mail -s "[$ts] Pollonius backup transfer report" webmaster@pollonius.com 
+# Don't use an email address @pollonius.com domain or update exim configuration
+ftp -ivn $FTP_HOST <<EOT | mail -s "[$ts] Pollonius backup transfer report" goriol@serquant.com 
 user $FTP_USER $FTP_PASS
 cd $DAY_OF_WEEK/dirs
 lcd $BACKUP_ROOT/dirs
