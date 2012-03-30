@@ -85,19 +85,19 @@ generatePasswords() {
         exit 20
     fi
     
-    USER_PWD=$(makepasswd --chars 8)
+    USER_PWD=$(makepasswd --chars 12)
     echo $USER_PWD >/root/.p.shell.$USER
     chmod 400 /root/.p.shell.$USER
     
-    MYSQL_ROOT_PWD=$(makepasswd --chars 8)
+    MYSQL_ROOT_PWD=$(makepasswd --chars 12)
     echo $MYSQL_ROOT_PWD >/root/.p.mysql.$MYSQL_ROOT_USER
     chmod 400 /root/.p.mysql.$MYSQL_ROOT_USER
     
-    MYSQL_APP_PWD=$(makepasswd --chars 8)
+    MYSQL_APP_PWD=$(makepasswd --chars 12)
     echo $MYSQL_APP_PWD >/root/.p.mysql.$MYSQL_APP_USER
     chmod 400 /root/.p.mysql.$MYSQL_APP_USER
     
-    MYSQL_BACKUP_PWD=$(makepasswd --chars 8)
+    MYSQL_BACKUP_PWD=$(makepasswd --chars 12)
     echo $MYSQL_BACKUP_PWD >/root/.p.mysql.$MYSQL_BACKUP_USER
     chmod 400 /root/.p.mysql.$MYSQL_BACKUP_USER
 }
@@ -174,6 +174,8 @@ installJDK() {
         exit 30
     fi
 
+    chown -R root:root $JDK_INSTALL_PATH/$install_dir
+    
     echo "JAVA_HOME=$JDK_INSTALL_PATH/$install_dir
 export JAVA_HOME
 
@@ -403,6 +405,11 @@ secureRootAccount() {
 #    rm /root/.p
 #    rm /root/.email
     
+    # Discovered unowned files installed by OVH RTM. Fix it.
+    chown -R root:root /usr/local/rtm/scripts
+    
+    # @todo Disable root account login
+    	
     apt-get -y install fail2ban
 }
 
