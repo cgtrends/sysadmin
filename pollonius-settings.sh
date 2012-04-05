@@ -11,6 +11,9 @@ WEBAPP_NAME="pollonius"
 # Webapp URL
 WEBAPP="ftp://${WEBAPP_DIST_SERVER}/${WEBAPP_NAME}.zip"
 
+# MySQL database name
+MYSQL_DB_NAME="poll"
+
 # MySQL user that is used by the application
 MYSQL_APP_USER="poll"
 
@@ -20,3 +23,6 @@ RESIN_ROOT="/var/www"
 # user/group in charge of application deployment and maintenance
 APP_USER="pollonius"
 APP_GROUP="www-data"
+
+# Database upgrade script basename
+DB_UPGRADE="db-upgrade"

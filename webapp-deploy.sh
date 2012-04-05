@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 #
 # Webapp upgrades deployment script
 
@@ -127,6 +127,15 @@ then
     echo "Unable to backup current webapp"
     echo "Deployment aborted"
     exit 12
+fi
+
+# Run database migration scripts
+$(dirname $0)/db-upgrade.sh
+if [ $? -ne 0 ]
+then
+    echo "Unable to upgrade database"
+    echo "Deployment aborted"
+    exit 13
 fi
 
 cp -r $APP_USER_HOME/$WEBAPP_NAME $RESIN_ROOT/webapps/.
