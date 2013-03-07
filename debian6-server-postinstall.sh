@@ -15,7 +15,8 @@ MYSQL_BACKUP_USER="backup"
 # Database name
 MYSQL_DB_NAME="poll"
 # URL of the SQL script used to create the database and initialize it
-MYSQL_DB_SCRIPT="http://124.248.205.49/sql/pollonius.sql"
+#MYSQL_DB_SCRIPT="http://124.248.205.49/sql/pollonius.sql"
+MYSQL_DB_SCRIPT="http://dl.dropbox.com/u/69660680/pollonius.sql"
 
 # URL of Resin. Must be a tar or tar gzip file.
 RESIN="http://www.caucho.com/download/resin-3.1.12.tar.gz"
@@ -34,8 +35,12 @@ RESIN_CONFIG_PATH="/etc/resin"
 USER="pollonius"
 
 # URL of the JDK. Must be a tar or tar gzip file.
+# Original URL
 #JDK="http://download.oracle.com/otn-pub/java/jdk/7u3-b04/jdk-7u3-linux-x64.tar.gz"
-JDK="http://dl.dropbox.com/u/3279745/jdk-7u3-linux-x64.tar.gz"
+# Personal Dropbox URL
+#JDK="http://dl.dropbox.com/u/3279745/jdk-7u3-linux-x64.tar.gz"
+# Pollonius Dropbox URL
+JDK="http://dl.dropbox.com/u/69660680/jdk-7u3-linux-x64.tar.gz"
 # Location of the Java virtual machines, without trailing slash
 JDK_INSTALL_PATH="/usr/lib/jvm"
 
@@ -63,7 +68,8 @@ updatePackages() {
     fi
     
     # Software RAID setup
-    echo mdadm mdadm/initrdstart string all | debconf-set-selections
+    #echo mdadm mdadm/initrdstart string all | debconf-set-selections
+
     apt-get -y upgrade
     if [ $? -ne 0 ]
     then
@@ -406,7 +412,7 @@ secureRootAccount() {
 #    rm /root/.email
     
     # Discovered unowned files installed by OVH RTM. Fix it.
-    chown -R root:root /usr/local/rtm/scripts
+    #chown -R root:root /usr/local/rtm/scripts
     
     # @todo Disable root account login
     	
@@ -464,7 +470,7 @@ dc_localdelivery='maildir_home'
 
 # ------------------------------------------------------------------------------
 prepareSysAdmin() {
-	mkdir -p /root/scripts
+    mkdir -p /root/scripts
     mkdir -p /var/log/backup
     mkdir -p /backup/dirs
     mkdir -p /backup/www
