@@ -6,22 +6,31 @@
 # Domain Name
 DOMAIN_NAME="pollonius.com"
 
+# Server configuration
+SOFWARE_RAID_ENABLED=false
+
 # MySQL root user
 MYSQL_ROOT_USER="root"
+MYSQL_ROOT_PWD_STORE="/root/.p.mysql.$MYSQL_ROOT_USER"
 # MySQL user that is used by the application
 MYSQL_APP_USER="poll"
+MYSQL_APP_PWD_STORE="/root/.p.mysql.$MYSQL_APP_USER"
 # MySQL user that is used to backup databases
 MYSQL_BACKUP_USER="backup"
+MYSQL_BACKUP_PWD_STORE="/root/.p.mysql.$MYSQL_BACKUP_USER"
 # Database name
 MYSQL_DB_NAME="poll"
 # URL of the SQL script used to create the database and initialize it
+# Databao
 #MYSQL_DB_SCRIPT="http://124.248.205.49/sql/pollonius.sql"
+# Pollonius Dropbox
 MYSQL_DB_SCRIPT="http://dl.dropbox.com/u/69660680/pollonius.sql"
 
 # URL of Resin. Must be a tar or tar gzip file.
 RESIN="http://www.caucho.com/download/resin-3.1.12.tar.gz"
 # Resin install path (no trailing slash)
 RESIN_INSTALL_PATH="/usr/local/share"
+RESIN_HOME_STORE="/root/.resin.home"
 # User under which Resin will run
 RESIN_USER="www-data"
 # Group of the user
@@ -33,13 +42,14 @@ RESIN_CONFIG_PATH="/etc/resin"
 
 # Convenience user
 USER="pollonius"
+USER_PWD_STORE="/root/.p.shell.$USER"
 
 # URL of the JDK. Must be a tar or tar gzip file.
-# Original URL
+# Oracle
 #JDK="http://download.oracle.com/otn-pub/java/jdk/7u3-b04/jdk-7u3-linux-x64.tar.gz"
-# Personal Dropbox URL
+# Personal Dropbox
 #JDK="http://dl.dropbox.com/u/3279745/jdk-7u3-linux-x64.tar.gz"
-# Pollonius Dropbox URL
+# Pollonius Dropbox
 JDK="http://dl.dropbox.com/u/69660680/jdk-7u3-linux-x64.tar.gz"
 # Location of the Java virtual machines, without trailing slash
 JDK_INSTALL_PATH="/usr/lib/jvm"
@@ -54,59 +64,6 @@ BACKUP_SEND="backup-send.sh"
 BACKUP_NIGHTLY="backup-nightly.sh"
 BACKUP_CRONTAB="crontab.dist"
 WEBAPP_DEPLOY="webapp-deploy.sh"
-
-# ------------------------------------------------------------------------------
-updatePackages() {
-    echo "Updating Debian packages..."
-    
-    apt-get update
-    if [ $? -ne 0 ]
-    then
-        echo "Unable to update Debian packages"
-        echo "Post-install aborted"
-        exit 10
-    fi
-    
-    # Software RAID setup
-    #echo mdadm mdadm/initrdstart string all | debconf-set-selections
-
-    apt-get -y upgrade
-    if [ $? -ne 0 ]
-    then
-        echo "Unable to upgrade Debian packages"
-        echo "Post-install aborted"
-        exit 11
-    fi
-}
-
-# ------------------------------------------------------------------------------
-generatePasswords() {
-    echo "Generating passwords..."
-    
-    apt-get -y install makepasswd
-    if [ $? -ne 0 ]
-    then
-        echo "Unable to get makepasswd"
-        echo "Post-install aborted"
-        exit 20
-    fi
-    
-    USER_PWD=$(makepasswd --chars 12)
-    echo $USER_PWD >/root/.p.shell.$USER
-    chmod 400 /root/.p.shell.$USER
-    
-    MYSQL_ROOT_PWD=$(makepasswd --chars 12)
-    echo $MYSQL_ROOT_PWD >/root/.p.mysql.$MYSQL_ROOT_USER
-    chmod 400 /root/.p.mysql.$MYSQL_ROOT_USER
-    
-    MYSQL_APP_PWD=$(makepasswd --chars 12)
-    echo $MYSQL_APP_PWD >/root/.p.mysql.$MYSQL_APP_USER
-    chmod 400 /root/.p.mysql.$MYSQL_APP_USER
-    
-    MYSQL_BACKUP_PWD=$(makepasswd --chars 12)
-    echo $MYSQL_BACKUP_PWD >/root/.p.mysql.$MYSQL_BACKUP_USER
-    chmod 400 /root/.p.mysql.$MYSQL_BACKUP_USER
-}
 
 # ------------------------------------------------------------------------------
 # url string URL of the archive to download 
@@ -171,6 +128,110 @@ downloadAndExpand() {
 }
 
 # ------------------------------------------------------------------------------
+setHostName() {
+    echo "Setting host name..."
+    
+    system_name=$(grep -o "^[^.]*" /etc/hostname)
+    fqdn="$system_name.$DOMAIN_NAME"
+    echo $fqdn >/etc/hostname
+    invoke-rc.d hostname.sh stop
+    invoke-rc.d hostname.sh start
+    
+    sed -i -e 's/^\([0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}[[:space:]]\+\)\('"$system_name"'\).*$/\1'"$fqdn"'/' /etc/hosts
+}
+
+# ------------------------------------------------------------------------------
+updatePackages() {
+    echo "Updating Debian packages..."
+    
+    apt-get update
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to update Debian packages"
+        echo "Post-install aborted"
+        exit 10
+    fi
+    
+    # Software RAID setup
+    if $SOFTWARE_RAID_ENABLED
+    then
+        echo mdadm mdadm/initrdstart string all | debconf-set-selections
+    fi
+    
+    apt-get -y upgrade
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to upgrade Debian packages"
+        echo "Post-install aborted"
+        exit 11
+    fi
+}
+
+# ------------------------------------------------------------------------------
+installNtp() {
+    echo "Synchronizing with a time server..."
+    
+    apt-get -y install ntpdate
+    ntpdate pool.ntp.org
+    
+    apt-get -y install ntp
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to install NTP"
+        echo "Post-install aborted"
+        exit 80
+    fi
+}
+
+# ------------------------------------------------------------------------------
+secureRootAccount() {
+    echo "Securing root account..."
+    
+#    rm /root/.ssh/authorized_keys2
+#    rm /root/.p
+#    rm /root/.email
+    
+    # Discovered unowned files installed by OVH RTM. Fix it.
+    if [ -e "/usr/local/rtm/scripts" ]
+    then
+        chown -R root:root /usr/local/rtm/scripts
+    fi
+    
+    # @todo Disable root account login
+        
+    apt-get -y install fail2ban
+}
+
+# ------------------------------------------------------------------------------
+generatePasswords() {
+    echo "Generating passwords..."
+    
+    apt-get -y install makepasswd
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to get makepasswd"
+        echo "Post-install aborted"
+        exit 20
+    fi
+    
+    user_pwd=$(makepasswd --chars 12)
+    echo $user_pwd >$USER_PWD_STORE
+    chmod 400 $USER_PWD_STORE
+    
+    mysql_root_pwd=$(makepasswd --chars 12)
+    echo $mysql_root_pwd >$MYSQL_ROOT_PWD_STORE
+    chmod 400 $MYSQL_ROOT_PWD_STORE
+    
+    mysql_app_pwd=$(makepasswd --chars 12)
+    echo $mysql_app_pwd >$MYSQL_APP_PWD_STORE
+    chmod 400 $MYSQL_APP_PWD_STORE
+    
+    mysql_backup_pwd=$(makepasswd --chars 12)
+    echo $mysql_backup_pwd >$MYSQL_BACKUP_PWD_STORE
+    chmod 400 $MYSQL_BACKUP_PWD_STORE
+}
+
+# ------------------------------------------------------------------------------
 installJDK() {
     echo "Installing JDK..."
     downloadAndExpand $JDK $JDK_INSTALL_PATH
@@ -201,8 +262,9 @@ export CLASSPATH" >/etc/profile.d/jdk.sh
 installMysql() {
     echo "Installing MySQL server..."
     
-    echo mysql-server mysql-server/root_password password $MYSQL_ROOT_PWD | debconf-set-selections
-    echo mysql-server mysql-server/root_password_again password $MYSQL_ROOT_PWD | debconf-set-selections
+    mysql_root_pwd=$(cat $MYSQL_ROOT_PWD_STORE)
+    echo mysql-server mysql-server/root_password password $mysql_root_pwd | debconf-set-selections
+    echo mysql-server mysql-server/root_password_again password $mysql_root_pwd | debconf-set-selections
     apt-get -y install mysql-server mysql-client
     if [ $? -ne 0 ]
     then
@@ -211,12 +273,12 @@ installMysql() {
         exit 40
     fi
     
-    mysqladmin --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD status >/dev/null
+    mysqladmin --user=$MYSQL_ROOT_USER --password=$mysql_root_pwd status >/dev/null
     if [ $? -ne 0 ]
     then
         invoke-rc.d mysql start
     fi
-    mysqladmin --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD status >/dev/null
+    mysqladmin --user=$MYSQL_ROOT_USER --password=$mysql_root_pwd status >/dev/null
     if [ $? -ne 0 ]
     then
         echo "Unable to run MySQL"
@@ -229,9 +291,10 @@ installMysql() {
 createUserAccounts() {
     echo "Creating user accounts..."
     
+    user_pwd=$(cat $USER_PWD_STORE)
     local gid=$(grep "^$RESIN_GROUP" /etc/group | cut -d':' -f3)
     useradd -d /home/$USER -m -g $gid --shell /bin/bash $USER
-    echo "$USER:$USER_PWD" | chpasswd
+    echo "$USER:$user_pwd" | chpasswd
 }
 
 # ------------------------------------------------------------------------------
@@ -246,15 +309,20 @@ initDatabase() {
         echo "Post-install aborted"
         exit 50
     fi
-    mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD < /home/$USER/$sql
+    
+    mysql_root_pwd=$(cat $MYSQL_ROOT_PWD_STORE)
+    mysql_app_pwd=$(cat $MYSQL_APP_PWD_STORE)
+    mysql_backup_pwd=$(cat $MYSQL_BACKUP_PWD_STORE)
+    
+    mysql --user=$MYSQL_ROOT_USER --password=$mysql_root_pwd < /home/$USER/$sql
 
-    mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "CREATE USER '$MYSQL_APP_USER'@'localhost' IDENTIFIED BY '$MYSQL_APP_PWD';"
-    mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "GRANT ALL PRIVILEGES ON $MYSQL_DB_NAME.* TO '$MYSQL_APP_USER'@'localhost' WITH GRANT OPTION;"
+    mysql --user=$MYSQL_ROOT_USER --password=$mysql_root_pwd -e "CREATE USER '$MYSQL_APP_USER'@'localhost' IDENTIFIED BY '$mysql_app_pwd';"
+    mysql --user=$MYSQL_ROOT_USER --password=$mysql_root_pwd -e "GRANT ALL PRIVILEGES ON $MYSQL_DB_NAME.* TO '$MYSQL_APP_USER'@'localhost' WITH GRANT OPTION;"
 
-    mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "CREATE USER '$MYSQL_BACKUP_USER'@'localhost' IDENTIFIED BY '$MYSQL_BACKUP_PWD';"
-    mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "GRANT SELECT, LOCK TABLES ON *.* TO '$MYSQL_BACKUP_USER'@'localhost';"
+    mysql --user=$MYSQL_ROOT_USER --password=$mysql_root_pwd -e "CREATE USER '$MYSQL_BACKUP_USER'@'localhost' IDENTIFIED BY '$mysql_backup_pwd';"
+    mysql --user=$MYSQL_ROOT_USER --password=$mysql_root_pwd -e "GRANT SELECT, LOCK TABLES ON *.* TO '$MYSQL_BACKUP_USER'@'localhost';"
 
-    mysql --user=$MYSQL_ROOT_USER --password=$MYSQL_ROOT_PWD -e "FLUSH PRIVILEGES;"
+    mysql --user=$MYSQL_ROOT_USER --password=$mysql_root_pwd -e "FLUSH PRIVILEGES;"
 }
 
 # ------------------------------------------------------------------------------
@@ -280,10 +348,11 @@ installResin() {
         echo "Post-install aborted"
         exit 70
     fi
-    RESIN_HOME=$RESIN_INSTALL_PATH/$install_dir
-    ln -s -f $RESIN_HOME $RESIN_INSTALL_PATH/resin
+    resin_home="$RESIN_INSTALL_PATH/$install_dir"
+    cat $resin_home >$RESIN_HOME_STORE
+    ln -s -f $resin_home $RESIN_INSTALL_PATH/resin
     
-    cd $RESIN_HOME
+    cd $resin_home
     ./configure --enable-64bit --enable-ssl    
     if [ $? -ne 0 ]
     then
@@ -312,6 +381,8 @@ installResin() {
 # ------------------------------------------------------------------------------
 configureResin() {
     echo "Configuring Resin..."
+    resin_home=$(cat $RESIN_HOME_STORE)
+
     mkdir -p $RESIN_ROOT
     mkdir -p $RESIN_ROOT/webapps
     chown $RESIN_USER:$RESIN_GROUP $RESIN_ROOT/webapps
@@ -337,7 +408,7 @@ configureResin() {
 '
     
     mkdir -p $RESIN_CONFIG_PATH
-    cp $RESIN_HOME/conf/resin.conf $RESIN_CONFIG_PATH/resin.conf.dist
+    cp $resin_home/conf/resin.conf $RESIN_CONFIG_PATH/resin.conf.dist
     sed -e 's/^\(\s*<http address="\*" port="\)8080\(.*\)$/\180\2/' \
         -e '/^\s*<jvm-arg>-Dcom.sun.management.jmxremote<\/jvm-arg>\s*$/a \      <jvm-arg>-d64</jvm-arg>' \
         -e 's/^\(\s*<web-app id="\)\/\(".*\)$/\1\/root\2/' \
@@ -348,6 +419,7 @@ configureResin() {
 # ------------------------------------------------------------------------------
 configureResinStartup() {
     echo "Configuring Resin startup script..."
+    resin_home=$(cat $RESIN_HOME_STORE)
     
     local lsb='### BEGIN INIT INFO\
 # Provides:          resin\
@@ -366,57 +438,12 @@ RESIN_CONF="-conf '"$RESIN_CONFIG_PATH"'/resin.conf"'
     sed -e '/^#!\/bin\/sh\s*$/a '"$lsb" \
         -e '/^USER=.*$/a '"$args" \
         -e 's/^ARGS=".*"\s*$/ARGS="$RESIN_CONF $RESIN_ROOT $SERVER"/' \
-        $RESIN_HOME/contrib/init.resin > /etc/init.d/resin
+        $resin_home/contrib/init.resin > /etc/init.d/resin
         
     chmod 755 /etc/init.d/resin
         
     update-rc.d resin defaults
     invoke-rc.d resin start
-}
-
-# ------------------------------------------------------------------------------
-installNtp() {
-    echo "Synchronizing with a time server..."
-    
-    apt-get -y install ntpdate
-    ntpdate pool.ntp.org
-    
-    apt-get -y install ntp
-    if [ $? -ne 0 ]
-    then
-        echo "Unable to install NTP"
-        echo "Post-install aborted"
-        exit 80
-    fi
-}
-
-# ------------------------------------------------------------------------------
-setHostName() {
-    echo "Setting host name..."
-    
-    SYSTEM_NAME=$(grep -o "^[^.]*" /etc/hostname)
-    FQDN="$SYSTEM_NAME.$DOMAIN_NAME"
-    echo $FQDN >/etc/hostname
-    invoke-rc.d hostname.sh stop
-    invoke-rc.d hostname.sh start
-    
-    sed -i -e 's/^\([0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}[[:space:]]\+\)\('"$SYSTEM_NAME"'\).*$/\1'"$FQDN"'/' /etc/hosts
-}
-
-# ------------------------------------------------------------------------------
-secureRootAccount() {
-    echo "Securing root account..."
-    
-#    rm /root/.ssh/authorized_keys2
-#    rm /root/.p
-#    rm /root/.email
-    
-    # Discovered unowned files installed by OVH RTM. Fix it.
-    #chown -R root:root /usr/local/rtm/scripts
-    
-    # @todo Disable root account login
-    	
-    apt-get -y install fail2ban
 }
 
 # ------------------------------------------------------------------------------
@@ -431,7 +458,8 @@ installExim() {
         exit 81
     fi
     
-    echo $FQDN >/etc/mailname
+    fqdn=$(cat /etc/hostname)
+    echo $fqdn >/etc/mailname
     echo "# /etc/exim4/update-exim4.conf.conf
 #
 # Edit this file and /etc/mailname by hand and execute update-exim4.conf
@@ -451,7 +479,7 @@ installExim() {
 # This is a Debian specific file
 
 dc_eximconfig_configtype='internet'
-dc_other_hostnames='$FQDN'
+dc_other_hostnames='$fqdn'
 dc_local_interfaces='127.0.0.1 ; ::1'
 dc_readhost=''
 dc_relay_domains=''
