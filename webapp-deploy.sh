@@ -9,16 +9,18 @@ then
     exit 1
 fi
 
+source $(dirname $0)/pollonius-settings.sh
+protocol=$(echo $WEBAPP | grep -o '^[A-Za-z]\+' | tr '[A-Z]' '[a-z]')
+
+# Script invoked with wrong command-line args?
 E_OPTERROR=85
-if [ $# -ne "2" ] # Script invoked with wrong command-line args?
+if [ "$protocol" == "ftp" ] && [ $# -ne "2" ]
 then
   echo "Usage: `basename $0` user password"
   exit $E_OPTERROR # Exit and explain usage.
 fi  
 FTP_USER=$1
 FTP_PASSWORD=$2
-
-source $(dirname $0)/pollonius-settings.sh
 
 # MySQL password
 MYSQL_APP_PWD=$(cat /root/.p.mysql.$MYSQL_APP_USER)
@@ -36,7 +38,12 @@ then
     exit 3
 fi
 
-wget --ftp-user=$FTP_USER --ftp-password=$FTP_PASSWORD $WEBAPP
+if [ "$protocol" == "ftp" ]
+then
+    wget --ftp-user=$FTP_USER --ftp-password=$FTP_PASSWORD $WEBAPP
+else
+    wget $WEBAPP
+fi
 if [ $? -ne 0 ]
 then
     echo "Unable to download webapp"

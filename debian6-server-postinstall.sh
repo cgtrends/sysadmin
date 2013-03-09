@@ -21,9 +21,7 @@ MYSQL_BACKUP_PWD_STORE="/root/.p.mysql.$MYSQL_BACKUP_USER"
 # Database name
 MYSQL_DB_NAME="poll"
 # URL of the SQL script used to create the database and initialize it
-# Databao
 #MYSQL_DB_SCRIPT="http://124.248.205.49/sql/pollonius.sql"
-# Pollonius Dropbox
 MYSQL_DB_SCRIPT="http://dl.dropbox.com/u/69660680/pollonius.sql"
 
 # URL of Resin. Must be a tar or tar gzip file.
@@ -63,6 +61,8 @@ BACKUP_INIT="backup-init.sh"
 BACKUP_SEND="backup-send.sh"
 BACKUP_NIGHTLY="backup-nightly.sh"
 BACKUP_CRONTAB="crontab.dist"
+WEBAPP_SETTINGS="pollonius-settings.sh"
+WEBAPP_DB_UPGRADE="db-upgrade.sh"
 WEBAPP_DEPLOY="webapp-deploy.sh"
 
 # ------------------------------------------------------------------------------
@@ -252,7 +252,7 @@ export JRE_HOME
 PATH=$PATH:\$JAVA_HOME/bin
 export PATH
 
-CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+CLASSPATH=.:\$JAVA_HOME/lib/dt.jar:\$JAVA_HOME/lib/tools.jar
 export CLASSPATH" >/etc/profile.d/jdk.sh
 
     . /etc/profile.d/jdk.sh
